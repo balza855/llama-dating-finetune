@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RunPod Simple Llama-3.3-70B Fine-tuning
-Hugging Face'den training data indirip fine-tuning yapar
+RunPod Simple Llama-3.1-8B Fine-tuning - Gradient Hatası Düzeltilmiş
 """
 
 import os
@@ -25,42 +24,29 @@ from datasets import Dataset
 import wandb
 from datetime import datetime
 
-# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
 class SimpleConfig:
-    """Basit fine-tuning konfigürasyonu"""
-    
-    # Model settings
     model_name: str = "meta-llama/Llama-3.1-8B-Instruct"
     output_dir: str = "./llama_8b_dating_model"
-    
-    # Training data (Hugging Face'den)
-    hf_dataset_name: str = "sworm/datingassistant"  # GitHub username/repo
+    hf_dataset_name: str = "sworm/datingassistant"
     data_file: str = "training_data.jsonl"
-    
-    # LoRA settings (8B model için optimize edilmiş)
-    lora_r: int = 32
-    lora_alpha: int = 64
+    lora_r: int = 16  # LoRA rank azalt
+    lora_alpha: int = 32  # LoRA alpha azalt
     lora_dropout: float = 0.1
     lora_target_modules: List[str] = field(default_factory=lambda: [
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj"
+        "q_proj", "k_proj", "v_proj", "o_proj"
     ])
-    
-    # Training settings (8B model için optimize edilmiş)
-    num_train_epochs: int = 3
-    per_device_train_batch_size: int = 1  # Batch size azalt
-    gradient_accumulation_steps: int = 8   # Gradient accumulation artır
-    learning_rate: float = 3e-4  # 8B model için biraz daha yüksek LR
-    max_length: int = 1024  # Max length azalt
-    
-    # Optimization
+    num_train_epochs: int = 2  # Epoch azalt
+    per_device_train_batch_size: int = 1
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 5e-4  # Learning rate artır
+    max_length: int = 512  # Max length daha da azalt
     fp16: bool = True
-    save_steps: int = 500
-    eval_steps: int = 500
+    save_steps: int = 100
+    eval_steps: int = 100
     logging_steps: int = 10
 
 class SimpleLlamaFineTuner:
@@ -69,14 +55,12 @@ class SimpleLlamaFineTuner:
         self.tokenizer = None
         self.model = None
         self.trainer = None
-        
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Device: {self.device}")
         if torch.cuda.is_available():
             logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
     
     def setup_wandb(self):
-        """Weights & Biases setup"""
         try:
             wandb.init(
                 project="llama-dating-runpod",
@@ -85,24 +69,19 @@ class SimpleLlamaFineTuner:
             )
             logger.info("✅ Weights & Biases initialized")
         except:
-            logger.warning("⚠️  Weights & Biases başlatılamadı, devam ediliyor...")
+            logger.warning("⚠️  Weights & Biases başlatılamadı")
     
     def load_tokenizer(self):
-        """Tokenizer yükle"""
         logger.info("🔄 Tokenizer yükleniyor...")
-        
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config.model_name,
             trust_remote_code=True
         )
-        
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        
         logger.info("✅ Tokenizer yüklendi")
     
     def load_model(self):
-        """Model yükle"""
         logger.info("🔄 Model yükleniyor...")
         
         # 4-bit quantization
@@ -134,41 +113,40 @@ class SimpleLlamaFineTuner:
         
         # LoRA uygula
         self.model = get_peft_model(self.model, lora_config)
-        self.model.print_trainable_parameters()
+        
+        # Model'i training mode'a al
+        self.model.train()
+        
+        # Trainable parametreleri kontrol et
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in self.model.parameters())
+        logger.info(f"Trainable parameters: {trainable_params:,}")
+        logger.info(f"Total parameters: {total_params:,}")
+        logger.info(f"Trainable %: {100 * trainable_params / total_params:.2f}%")
         
         logger.info("✅ Model yüklendi ve LoRA uygulandı")
     
     def download_training_data(self):
-        """Hugging Face'den training data indir"""
         logger.info("📥 Training data indiriliyor...")
-        
         try:
             from huggingface_hub import hf_hub_download
-            
-            # Training data indir
             data_path = hf_hub_download(
                 repo_id=self.config.hf_dataset_name,
                 filename=self.config.data_file,
                 repo_type="dataset"
             )
-            
             logger.info(f"✅ Training data indirildi: {data_path}")
             return data_path
-            
         except Exception as e:
             logger.error(f"❌ Training data indirilemedi: {e}")
             raise
     
-    def load_dataset(self, data_path: str) -> tuple[Dataset, Dataset]:
-        """Dataset yükle ve split yap"""
+    def load_dataset(self, data_path: str):
         logger.info("🔄 Dataset yükleniyor...")
-        
-        # JSONL dosyasını oku
         data = []
         with open(data_path, 'r', encoding='utf-8') as f:
             for line in f:
                 data.append(json.loads(line.strip()))
-        
         logger.info(f"✅ Toplam {len(data)} örnek yüklendi")
         
         # Train/Val split (90/10)
@@ -197,7 +175,7 @@ class SimpleLlamaFineTuner:
         tokenized = self.tokenizer(
             texts,
             truncation=True,
-            padding=True,  # Padding ekle
+            padding=True,
             max_length=self.config.max_length,
             return_tensors=None
         )
@@ -207,8 +185,7 @@ class SimpleLlamaFineTuner:
         
         return tokenized
     
-    def setup_trainer(self, train_dataset: Dataset, val_dataset: Dataset):
-        """Trainer setup"""
+    def setup_trainer(self, train_dataset, val_dataset):
         logger.info("🔄 Trainer setup ediliyor...")
         
         # Training arguments
@@ -222,13 +199,13 @@ class SimpleLlamaFineTuner:
             # Optimization
             fp16=self.config.fp16,
             dataloader_pin_memory=False,
-            dataloader_num_workers=4,
+            dataloader_num_workers=0,  # Worker sayısını 0 yap
             
             # Logging
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
             eval_steps=self.config.eval_steps,
-            save_total_limit=3,
+            save_total_limit=2,
             
             # Evaluation
             evaluation_strategy="steps",
@@ -236,7 +213,7 @@ class SimpleLlamaFineTuner:
             
             # Memory optimizations
             gradient_checkpointing=True,
-            optim="adamw_torch_fused",
+            optim="adamw_torch",
             
             # RunPod optimizations
             remove_unused_columns=False,
@@ -262,9 +239,7 @@ class SimpleLlamaFineTuner:
         logger.info("✅ Trainer setup edildi")
     
     def train(self):
-        """Fine-tuning başlat"""
         logger.info("🚀 Fine-tuning başlıyor...")
-        
         try:
             # Training başlat
             self.trainer.train()
@@ -281,7 +256,6 @@ class SimpleLlamaFineTuner:
             raise
     
     def run(self):
-        """Ana işlemi çalıştır"""
         try:
             # Setup
             self.setup_wandb()
@@ -320,7 +294,6 @@ class SimpleLlamaFineTuner:
                 wandb.finish()
 
 def main():
-    """Ana fonksiyon"""
     config = SimpleConfig()
     fine_tuner = SimpleLlamaFineTuner(config)
     fine_tuner.run()
