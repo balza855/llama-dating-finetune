@@ -21,7 +21,7 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model, TaskType
 from datasets import Dataset
-import wandb
+# import wandb  # W&B'yi tamamen devre dışı bırak
 from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
