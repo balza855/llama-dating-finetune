@@ -61,22 +61,9 @@ class SimpleLlamaFineTuner:
             logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
     
     def setup_wandb(self):
-        try:
-            # W&B token kontrol et
-            wandb_token = os.getenv("WANDB_API_KEY")
-            if not wandb_token:
-                logger.warning("⚠️  WANDB_API_KEY bulunamadı, W&B devre dışı")
-                return
-            
-            wandb.init(
-                project="llama-dating-runpod",
-                name=f"llama-dating-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-                config=self.config.__dict__
-            )
-            logger.info("✅ Weights & Biases initialized")
-        except Exception as e:
-            logger.warning(f"⚠️  Weights & Biases başlatılamadı: {e}")
-            logger.warning("W&B olmadan devam ediliyor...")
+        # W&B'yi tamamen devre dışı bırak
+        logger.info("⚠️  Weights & Biases devre dışı - training logs console'da görünecek")
+        return
     
     def load_tokenizer(self):
         logger.info("🔄 Tokenizer yükleniyor...")
@@ -240,7 +227,7 @@ class SimpleLlamaFineTuner:
             
             # RunPod optimizations
             remove_unused_columns=False,
-            report_to="wandb" if os.getenv("WANDB_API_KEY") and wandb.run else None,
+            report_to=None,  # W&B'yi tamamen devre dışı bırak
         )
         
         # Data collator
@@ -313,8 +300,8 @@ class SimpleLlamaFineTuner:
             logger.error(f"❌ Hata: {str(e)}")
             raise
         finally:
-            if wandb.run:
-                wandb.finish()
+            # W&B'yi tamamen devre dışı bıraktık
+            pass
 
 def main():
     config = SimpleConfig()
