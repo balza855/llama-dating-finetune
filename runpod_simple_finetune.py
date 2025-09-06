@@ -232,7 +232,6 @@ class SimpleLlamaFineTuner:
             
             # Evaluation
             evaluation_strategy="steps",
-            eval_steps=self.config.eval_steps,
             save_strategy="steps",
             
             # Memory optimizations
