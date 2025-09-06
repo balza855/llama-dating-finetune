@@ -52,10 +52,10 @@ class SimpleConfig:
     
     # Training settings (8B model için optimize edilmiş)
     num_train_epochs: int = 3
-    per_device_train_batch_size: int = 2  # 8B model daha az VRAM kullanır
-    gradient_accumulation_steps: int = 4
+    per_device_train_batch_size: int = 1  # Batch size azalt
+    gradient_accumulation_steps: int = 8   # Gradient accumulation artır
     learning_rate: float = 3e-4  # 8B model için biraz daha yüksek LR
-    max_length: int = 2048
+    max_length: int = 1024  # Max length azalt
     
     # Optimization
     fp16: bool = True
@@ -182,7 +182,7 @@ class SimpleLlamaFineTuner:
         return Dataset.from_list(train_data), Dataset.from_list(val_data)
     
     def tokenize_function(self, examples):
-        """Dataset'i tokenize et"""
+        """Dataset'i tokenize et - düzeltilmiş versiyon"""
         texts = []
         for messages in examples["messages"]:
             # Chat template kullan
@@ -193,11 +193,11 @@ class SimpleLlamaFineTuner:
             )
             texts.append(text)
         
-        # Tokenize
+        # Tokenize with proper padding
         tokenized = self.tokenizer(
             texts,
             truncation=True,
-            padding=False,
+            padding=True,  # Padding ekle
             max_length=self.config.max_length,
             return_tensors=None
         )
