@@ -44,6 +44,9 @@ def load_model():
         # LoRA adapter'ı yükle
         model = PeftModel.from_pretrained(base_model, "sworm/llama-8b-dating-model")
         
+        # Model device'ını kontrol et
+        logger.info(f"Model device: {next(model.parameters()).device}")
+        
         logger.info("✅ Model başarıyla yüklendi!")
         
     except Exception as e:
@@ -67,6 +70,9 @@ def generate_response(messages: list, max_tokens: int = 100, temperature: float 
             truncation=True,
             max_length=1024
         )
+        
+        # Move inputs to GPU
+        inputs = {k: v.to(model.device) for k, v in inputs.items()}
         
         # Generation
         with torch.no_grad():
