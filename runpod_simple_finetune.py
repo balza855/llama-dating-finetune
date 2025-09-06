@@ -125,12 +125,23 @@ class SimpleLlamaFineTuner:
         # Model'i training mode'a al
         self.model.train()
         
+        # Tüm LoRA parametrelerini aktif et
+        for name, param in self.model.named_parameters():
+            if 'lora_' in name:
+                param.requires_grad = True
+                logger.info(f"✅ {name} - requires_grad: {param.requires_grad}")
+        
         # Trainable parametreleri kontrol et
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         total_params = sum(p.numel() for p in self.model.parameters())
         logger.info(f"Trainable parameters: {trainable_params:,}")
         logger.info(f"Total parameters: {total_params:,}")
         logger.info(f"Trainable %: {100 * trainable_params / total_params:.2f}%")
+        
+        # Gradient kontrolü
+        if trainable_params == 0:
+            logger.error("❌ Hiç trainable parametre yok!")
+            raise ValueError("Model parametreleri dondurulmuş!")
         
         logger.info("✅ Model yüklendi ve LoRA uygulandı")
     
@@ -222,7 +233,7 @@ class SimpleLlamaFineTuner:
             save_strategy="steps",
             
             # Memory optimizations
-            gradient_checkpointing=True,
+            gradient_checkpointing=False,  # Gradient checkpointing'i kapat
             optim="adamw_torch",
             
             # RunPod optimizations
