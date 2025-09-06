@@ -224,7 +224,7 @@ class SimpleLlamaFineTuner:
             save_total_limit=2,
             
             # Evaluation
-            evaluation_strategy="steps",
+            eval_strategy="steps",
             save_strategy="steps",
             
             # Memory optimizations
