@@ -73,9 +73,19 @@ class SimpleLlamaFineTuner:
     
     def load_tokenizer(self):
         logger.info("🔄 Tokenizer yükleniyor...")
+        
+        # Hugging Face token kontrol et
+        hf_token = os.getenv("HUGGING_FACE_HUB_TOKEN")
+        if not hf_token:
+            logger.error("❌ HUGGING_FACE_HUB_TOKEN bulunamadı!")
+            logger.info("🔑 Hugging Face token'ını ayarla:")
+            logger.info("export HUGGING_FACE_HUB_TOKEN=your_token_here")
+            raise ValueError("Hugging Face token gerekli!")
+        
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config.model_name,
-            trust_remote_code=True
+            trust_remote_code=True,
+            token=hf_token
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -83,6 +93,9 @@ class SimpleLlamaFineTuner:
     
     def load_model(self):
         logger.info("🔄 Model yükleniyor...")
+        
+        # Hugging Face token al
+        hf_token = os.getenv("HUGGING_FACE_HUB_TOKEN")
         
         # 4-bit quantization
         bnb_config = BitsAndBytesConfig(
@@ -98,7 +111,8 @@ class SimpleLlamaFineTuner:
             quantization_config=bnb_config,
             device_map="auto",
             trust_remote_code=True,
-            torch_dtype=torch.bfloat16
+            torch_dtype=torch.bfloat16,
+            token=hf_token
         )
         
         # LoRA config
@@ -130,10 +144,12 @@ class SimpleLlamaFineTuner:
         logger.info("📥 Training data indiriliyor...")
         try:
             from huggingface_hub import hf_hub_download
+            hf_token = os.getenv("HUGGING_FACE_HUB_TOKEN")
             data_path = hf_hub_download(
                 repo_id=self.config.hf_dataset_name,
                 filename=self.config.data_file,
-                repo_type="dataset"
+                repo_type="dataset",
+                token=hf_token
             )
             logger.info(f"✅ Training data indirildi: {data_path}")
             return data_path
