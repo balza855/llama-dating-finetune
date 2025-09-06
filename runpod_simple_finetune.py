@@ -62,14 +62,21 @@ class SimpleLlamaFineTuner:
     
     def setup_wandb(self):
         try:
+            # W&B token kontrol et
+            wandb_token = os.getenv("WANDB_API_KEY")
+            if not wandb_token:
+                logger.warning("⚠️  WANDB_API_KEY bulunamadı, W&B devre dışı")
+                return
+            
             wandb.init(
                 project="llama-dating-runpod",
                 name=f"llama-dating-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
                 config=self.config.__dict__
             )
             logger.info("✅ Weights & Biases initialized")
-        except:
-            logger.warning("⚠️  Weights & Biases başlatılamadı")
+        except Exception as e:
+            logger.warning(f"⚠️  Weights & Biases başlatılamadı: {e}")
+            logger.warning("W&B olmadan devam ediliyor...")
     
     def load_tokenizer(self):
         logger.info("🔄 Tokenizer yükleniyor...")
@@ -233,7 +240,7 @@ class SimpleLlamaFineTuner:
             
             # RunPod optimizations
             remove_unused_columns=False,
-            report_to="wandb" if wandb.run else None,
+            report_to="wandb" if os.getenv("WANDB_API_KEY") and wandb.run else None,
         )
         
         # Data collator
